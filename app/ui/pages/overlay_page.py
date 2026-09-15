@@ -10,12 +10,14 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QPushButton,
+    QSizePolicy,
     QSlider,
     QSpinBox,
     QVBoxLayout,
     QWidget,
 )
 
+from app.text_safety import soft_wrap_unbroken_text
 from app.ui import theme
 from app.ui.icons import IconProvider
 
@@ -42,11 +44,17 @@ class OverlayPage(QWidget):
         preview_layout.addStretch()
         self.preview_original = QLabel("Language shouldn't be a barrier to great ideas.")
         self.preview_original.setAlignment(Qt.AlignCenter)
+        self.preview_original.setTextFormat(Qt.PlainText)
         self.preview_original.setWordWrap(True)
+        self.preview_original.setMinimumWidth(0)
+        self.preview_original.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
         self.preview_original.setObjectName("OverlayOriginal")
         self.preview_translation = QLabel("Язык не должен быть преградой для великих идей.")
         self.preview_translation.setAlignment(Qt.AlignCenter)
+        self.preview_translation.setTextFormat(Qt.PlainText)
         self.preview_translation.setWordWrap(True)
+        self.preview_translation.setMinimumWidth(0)
+        self.preview_translation.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
         self.preview_translation.setObjectName("OverlayTranslation")
         preview_layout.addWidget(self.preview_original)
         preview_layout.addWidget(self.preview_translation)
@@ -93,8 +101,8 @@ class OverlayPage(QWidget):
         root.addLayout(content, 1)
 
     def update_preview(self, original: str, translated: str) -> None:
-        self.preview_original.setText(original)
-        self.preview_translation.setText(translated)
+        self.preview_original.setText(soft_wrap_unbroken_text(original))
+        self.preview_translation.setText(soft_wrap_unbroken_text(translated))
 
     def set_languages(self, source_name: str, target_name: str) -> None:
         self.original_check.setText(f"Show original {source_name}")

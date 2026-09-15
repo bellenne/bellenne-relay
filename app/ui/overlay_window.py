@@ -4,9 +4,17 @@ from __future__ import annotations
 
 from PySide6.QtCore import QPoint, Qt
 from PySide6.QtGui import QMouseEvent
-from PySide6.QtWidgets import QApplication, QLabel, QSizeGrip, QVBoxLayout, QWidget
+from PySide6.QtWidgets import (
+    QApplication,
+    QLabel,
+    QSizeGrip,
+    QSizePolicy,
+    QVBoxLayout,
+    QWidget,
+)
 
 from app.config import AppSettings
+from app.text_safety import soft_wrap_unbroken_text
 from app.ui import theme
 
 
@@ -25,7 +33,10 @@ class OverlayWindow(QWidget):
         layout.setContentsMargins(18, 10, 10, 6)
         self.label = QLabel()
         self.label.setAlignment(Qt.AlignCenter)
+        self.label.setTextFormat(Qt.PlainText)
         self.label.setWordWrap(True)
+        self.label.setMinimumWidth(0)
+        self.label.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
         layout.addWidget(self.label, 1)
         self.grip = QSizeGrip(self)
         layout.addWidget(self.grip, 0, Qt.AlignRight | Qt.AlignBottom)
@@ -35,7 +46,7 @@ class OverlayWindow(QWidget):
         self.set_click_through(self._click_through)
 
     def display(self, lines: list[str]) -> None:
-        self.label.setText("\n".join(lines))
+        self.label.setText("\n".join(soft_wrap_unbroken_text(line) for line in lines))
         if lines and not self.isVisible():
             self.show()
 

@@ -10,6 +10,7 @@ from collections.abc import Callable
 from contextlib import suppress
 
 from app.speech.models import TranscriptionResult
+from app.text_safety import collapse_pathological_runs
 
 from .engine import TranslationEngine
 from .models import TranslationResult
@@ -86,18 +87,22 @@ class TranslationWorker:
                     transcription = self._queue.get(timeout=0.1)
                 except queue.Empty:
                     continue
+                original = collapse_pathological_runs(transcription.text)
+                if original != transcription.text:
+                    LOGGER.warning("Collapsed a pathological repeated-character transcription")
                 started = time.monotonic()
                 translated = self._engine.translate(
-                    transcription.text,
+                    original,
                     self._source_language,
                     self._target_language,
                 )
+                translated = collapse_pathological_runs(translated)
                 finished = time.monotonic()
                 if translated:
                     self._on_result(
                         TranslationResult(
                             source_id=transcription.source_id,
-                            original=transcription.text,
+                            original=original,
                             translated=translated,
                             audio_duration=transcription.audio_duration,
                             transcription_seconds=transcription.processing_seconds,
@@ -115,4 +120,3 @@ class TranslationWorker:
             if self._engine is not None:
                 self._engine.close()
                 self._engine = None
-

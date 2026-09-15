@@ -5,6 +5,7 @@ from __future__ import annotations
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QFrame, QGridLayout, QLabel, QSizePolicy, QWidget
 
+from app.text_safety import soft_wrap_unbroken_text
 from app.ui import theme
 
 
@@ -31,10 +32,13 @@ class TranscriptRow(QFrame):
         meta.setObjectName("TranscriptMeta")
         translation_meta = QLabel(timestamp)
         translation_meta.setObjectName("TranscriptMeta")
-        original_label = QLabel(original)
-        translated_label = QLabel(translated)
+        original_label = QLabel(soft_wrap_unbroken_text(original))
+        translated_label = QLabel(soft_wrap_unbroken_text(translated))
         for label in (original_label, translated_label):
+            label.setTextFormat(Qt.PlainText)
             label.setWordWrap(True)
+            label.setMinimumWidth(0)
+            label.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
             label.setAlignment(Qt.AlignTop | Qt.AlignLeft)
             label.setTextInteractionFlags(Qt.TextSelectableByMouse)
             label.setObjectName("TranscriptText")

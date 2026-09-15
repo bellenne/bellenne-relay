@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QTimer
 from PySide6.QtWidgets import (
     QFrame,
     QGridLayout,
     QHBoxLayout,
     QLabel,
+    QPushButton,
     QScrollArea,
     QVBoxLayout,
     QWidget,
@@ -21,6 +22,8 @@ class TranscriptView(QWidget):
         super().__init__(parent)
         self.max_entries = max_entries
         self._rows: list[TranscriptRow] = []
+        self._follow_latest = True
+        self._auto_scrolling = False
         root = QVBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(0)
@@ -37,6 +40,7 @@ class TranscriptView(QWidget):
         self.feed_layout.addWidget(self.empty_state)
         self.feed_layout.addStretch(1)
         self.scroll.setWidget(self.feed)
+        self.scroll.verticalScrollBar().valueChanged.connect(self._scroll_position_changed)
         root.addWidget(self.scroll, 1)
 
         state = QFrame()
@@ -47,6 +51,11 @@ class TranscriptView(QWidget):
         self.state_label.setObjectName("MutedLabel")
         state_layout.addWidget(self.state_label)
         state_layout.addStretch()
+        self.latest_button = QPushButton("↓ Latest")
+        self.latest_button.setToolTip("Return to the newest translation")
+        self.latest_button.clicked.connect(self.follow_latest)
+        self.latest_button.hide()
+        state_layout.addWidget(self.latest_button)
         root.addWidget(state)
 
     def _build_header(self) -> QWidget:
@@ -93,6 +102,7 @@ class TranscriptView(QWidget):
         return layout, code_label, language_label
 
     def add_entry(self, timestamp: str, source: str, original: str, translated: str) -> None:
+        was_following_latest = self._follow_latest
         if self.empty_state.isVisible():
             self.empty_state.hide()
         if self._rows:
@@ -104,7 +114,43 @@ class TranscriptView(QWidget):
             old = self._rows.pop(0)
             self.feed_layout.removeWidget(old)
             old.deleteLater()
-        self.scroll.verticalScrollBar().setValue(self.scroll.verticalScrollBar().maximum())
+        if was_following_latest:
+            QTimer.singleShot(0, lambda current=row: self._scroll_to_entry(current, resume=True))
+        else:
+            self.latest_button.show()
+
+    def follow_latest(self) -> None:
+        self._follow_latest = True
+        self.latest_button.hide()
+        if self._rows:
+            QTimer.singleShot(0, lambda: self._scroll_to_entry(self._rows[-1], resume=True))
+
+    def _scroll_position_changed(self, value: int) -> None:
+        if self._auto_scrolling:
+            return
+        bar = self.scroll.verticalScrollBar()
+        self._follow_latest = value >= bar.maximum() - 2
+        self.latest_button.setVisible(bool(self._rows) and not self._follow_latest)
+
+    def _scroll_to_entry(self, row: TranscriptRow, *, resume: bool = False) -> None:
+        if resume:
+            self._follow_latest = True
+        if not self._follow_latest or row not in self._rows:
+            return
+        self.feed_layout.activate()
+        bar = self.scroll.verticalScrollBar()
+        target = latest_row_scroll_value(
+            row_top=row.y(),
+            row_height=row.height(),
+            viewport_height=self.scroll.viewport().height(),
+            maximum=bar.maximum(),
+        )
+        self._auto_scrolling = True
+        try:
+            bar.setValue(target)
+        finally:
+            self._auto_scrolling = False
+        self.latest_button.hide()
 
     def set_speech_state(self, text: str) -> None:
         self.state_label.setText(text)
@@ -126,4 +172,23 @@ class TranscriptView(QWidget):
             self.feed_layout.removeWidget(row)
             row.deleteLater()
         self._rows.clear()
+        self._follow_latest = True
+        self.latest_button.hide()
         self.empty_state.show()
+        QTimer.singleShot(0, lambda: self.scroll.verticalScrollBar().setValue(0))
+
+
+def latest_row_scroll_value(
+    *,
+    row_top: int,
+    row_height: int,
+    viewport_height: int,
+    maximum: int,
+    margin: int = 8,
+) -> int:
+    """Keep the latest row visible without blindly jumping to the feed bottom."""
+    if row_height + margin * 2 >= viewport_height:
+        desired = row_top - margin
+    else:
+        desired = row_top + row_height + margin - viewport_height
+    return min(maximum, max(0, desired))

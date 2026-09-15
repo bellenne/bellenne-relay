@@ -26,6 +26,17 @@ class FakeReverseTranslationEngine(TranslationEngine):
         pass
 
 
+class CapturingTranslationEngine(TranslationEngine):
+    received = ""
+
+    def translate(self, text: str, source_language: str, target_language: str) -> str:
+        type(self).received = text
+        return text
+
+    def close(self) -> None:
+        pass
+
+
 def transcription(text: str = "Hello") -> TranscriptionResult:
     now = time.monotonic()
     return TranscriptionResult(
@@ -80,3 +91,18 @@ def test_translation_worker_supports_reverse_direction() -> None:
     worker.stop()
 
     assert results[0].translated == "EN(Привет)"
+
+
+def test_translation_worker_collapses_pathological_recognizer_loop() -> None:
+    results: list[TranslationResult] = []
+    worker = TranslationWorker(CapturingTranslationEngine, results.append)
+    worker.start()
+    assert worker.wait_ready(timeout=1)
+
+    worker.submit(transcription("No" + "o" * 500))
+    worker.stop()
+
+    expected = "N" + "o" * 12 + "…"
+    assert CapturingTranslationEngine.received == expected
+    assert results[0].original == expected
+    assert results[0].translated == expected
